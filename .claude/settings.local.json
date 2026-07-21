@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm create *)",
+      "Bash(command -v nvm)",
+      "Read(//Users/djordjegrubac/**)",
+      "Bash(command -v fnm)",
+      "Bash(command -v n)",
+      "Bash(brew list *)",
+      "Read(//private/tmp/**)",
+      "Bash(npx create-vite@6 --help)",
+      "Bash(rm -rf /private/tmp/claude-501/-Users-djordjegrubac-Inventory-Management-inventory-management-web/8497d938-9875-4fde-8512-4f6d34cfff79/scratchpad/scaffold)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-djordjegrubac-Inventory-Management-inventory-management-web/8497d938-9875-4fde-8512-4f6d34cfff79/scratchpad/scaffold)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@mui/system/package.json'\\).version\\)\")",
+      "Bash(git ls-remote *)",
+      "Bash(gh repo *)",
+      "Bash(which -a gh; echo \"---\"; ls /usr/local/bin | grep -i gh; echo \"---\"; ls /opt/homebrew/bin 2>/dev/null | grep -i gh)",
+      "Bash(git config *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://github.com/djgrubac/inventory-management-web)"
+    ]
+  }
+}
