@@ -8,7 +8,10 @@ import { NavLink } from 'react-router-dom';
 
 const NAV_LINKS = [
   { to: '/', label: 'Dashboard' },
-  { to: '/inventory', label: 'Inventory' },
+  { to: '/warehouses', label: 'Warehouses' },
+  { to: '/stock', label: 'Stock' },
+  { to: '/products', label: 'Products' },
+  { to: '/orders', label: 'Orders' },
 ];
 
 export function AppHeader() {
@@ -25,6 +28,7 @@ export function AppHeader() {
               key={link.to}
               component={NavLink}
               to={link.to}
+              end={link.to === '/'}
               color="inherit"
               sx={{
                 '&.active': { fontWeight: 700 },
