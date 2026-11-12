@@ -13,6 +13,8 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductTable } from '../components/organisms/ProductTable';
 import { ProductFormDialog } from '../components/organisms/ProductFormDialog';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
+import { useClientPagination } from '../hooks/usePagination';
 import type { Product } from '../types/product';
 
 export function Products() {
@@ -29,11 +31,13 @@ export function Products() {
   const filtered = useMemo(() => {
     const term = debouncedSearch.trim().toLowerCase();
     return products.filter((p) => {
-      const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
+      const matchesSearch = !term || p.name.toLowerCase().includes(term) || (p.description ?? '').toLowerCase().includes(term);
       const matchesCategory = !categoryFilter || p.categoryUid === categoryFilter;
       return matchesSearch && matchesCategory;
     });
   }, [products, debouncedSearch, categoryFilter]);
+
+  const { page, rowsPerPage, pageItems, setPage, setRowsPerPage, resetPage } = useClientPagination(filtered);
 
   const openCreate = () => {
     setEditing(null);
@@ -58,7 +62,10 @@ export function Products() {
         <TextField
           placeholder="Search by name or description"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            resetPage();
+          }}
           size="small"
           sx={{ width: 320, maxWidth: '100%' }}
           slotProps={{
@@ -71,7 +78,10 @@ export function Products() {
             },
           }}
         />
-        <TextField label="Category" select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} size="small" sx={{ minWidth: 200 }}>
+        <TextField label="Category" select value={categoryFilter} onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            resetPage();
+          }} size="small" sx={{ minWidth: 200 }}>
           <MenuItem value="">All categories</MenuItem>
           {categories.map((c) => (
             <MenuItem key={c.uid} value={c.uid}>
@@ -81,7 +91,21 @@ export function Products() {
         </TextField>
       </Stack>
 
-      <ProductTable products={filtered} categories={categories} onEdit={openEdit} onDelete={setDeleting} />
+      <ProductTable
+        products={pageItems}
+        categories={categories}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+        footer={
+          <TablePaginationBar
+            count={filtered.length}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            onPageChange={setPage}
+            onRowsPerPageChange={setRowsPerPage}
+          />
+        }
+      />
 
       <ProductFormDialog
         open={dialogOpen}

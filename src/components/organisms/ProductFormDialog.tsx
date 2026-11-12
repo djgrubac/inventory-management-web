@@ -28,7 +28,7 @@ export function ProductFormDialog({ open, product, categories, onClose, onSubmit
 
   useEffect(() => {
     if (open) {
-      setValues(product ?? { ...EMPTY_FORM, categoryUid: categories[0]?.uid ?? '' });
+      setValues(product ? { ...product, description: product.description ?? '' } : { ...EMPTY_FORM, categoryUid: categories[0]?.uid ?? '' });
       setError(null);
     }
   }, [open, product, categories]);

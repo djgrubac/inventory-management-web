@@ -1,4 +1,6 @@
+import { useAuth0 } from '@auth0/auth0-react';
 import AppBar from '@mui/material/AppBar';
+import Divider from '@mui/material/Divider';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -15,6 +17,8 @@ const NAV_LINKS = [
 ];
 
 export function AppHeader() {
+  const { user, logout } = useAuth0();
+
   return (
     <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
       <Toolbar>
@@ -38,6 +42,13 @@ export function AppHeader() {
             </Button>
           ))}
         </Stack>
+        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+        <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+          {user?.email}
+        </Typography>
+        <Button color="inherit" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>
+          Log out
+        </Button>
       </Toolbar>
     </AppBar>
   );

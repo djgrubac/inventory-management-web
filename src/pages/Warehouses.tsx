@@ -15,12 +15,15 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useInventoryData } from '../context/InventoryDataContext';
 import { WarehouseFormDialog } from '../components/organisms/WarehouseFormDialog';
+import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
+import { useClientPagination } from '../hooks/usePagination';
 import type { Warehouse } from '../types/warehouse';
 
 export function Warehouses() {
   const { warehouses, addWarehouse, updateWarehouse } = useInventoryData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
+  const { page, rowsPerPage, pageItems, setPage, setRowsPerPage } = useClientPagination(warehouses);
 
   const openCreate = () => {
     setEditing(null);
@@ -52,7 +55,7 @@ export function Warehouses() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {warehouses.map((warehouse) => (
+            {pageItems.map((warehouse) => (
               <TableRow key={warehouse.uid} hover>
                 <TableCell>{warehouse.name}</TableCell>
                 <TableCell>{warehouse.address}</TableCell>
@@ -73,6 +76,13 @@ export function Warehouses() {
             )}
           </TableBody>
         </Table>
+        <TablePaginationBar
+          count={warehouses.length}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={setPage}
+          onRowsPerPageChange={setRowsPerPage}
+        />
       </TableContainer>
 
       <WarehouseFormDialog

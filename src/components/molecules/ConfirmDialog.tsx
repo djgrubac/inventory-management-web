@@ -10,11 +10,12 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   confirmLabel?: string;
+  confirmColor?: 'error' | 'success' | 'primary';
   onCancel: () => void;
   onConfirm: () => void;
 }
 
-export function ConfirmDialog({ open, title, description, confirmLabel = 'Confirm', onCancel, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, description, confirmLabel = 'Confirm', confirmColor = 'error', onCancel, onConfirm }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onCancel}>
       <DialogTitle>{title}</DialogTitle>
@@ -23,7 +24,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Confir
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button onClick={onConfirm} color="error" variant="contained">
+        <Button onClick={onConfirm} color={confirmColor} variant="contained">
           {confirmLabel}
         </Button>
       </DialogActions>
