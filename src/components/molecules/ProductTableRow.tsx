@@ -11,8 +11,9 @@ import { getStockLevel, type Product } from '../../types/product';
 interface ProductTableRowProps {
   product: Product;
   categoryCaption: string;
-  onEdit: (product: Product) => void;
-  onDelete: (product: Product) => void;
+  // Left out when the user may not edit or delete products; the button is hidden then.
+  onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
 }
 
 export function ProductTableRow({ product, categoryCaption, onEdit, onDelete }: ProductTableRowProps) {
@@ -29,12 +30,16 @@ export function ProductTableRow({ product, categoryCaption, onEdit, onDelete }: 
       </TableCell>
       <TableCell align="right">
         <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-          <IconButton size="small" aria-label="Edit product" onClick={() => onEdit(product)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" aria-label="Delete product" onClick={() => onDelete(product)}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {onEdit && (
+            <IconButton size="small" aria-label="Edit product" onClick={() => onEdit(product)}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          )}
+          {onDelete && (
+            <IconButton size="small" aria-label="Delete product" onClick={() => onDelete(product)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
       </TableCell>
     </TableRow>

@@ -4,14 +4,17 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { theme } from './theme/theme';
 import { InventoryDataProvider } from './context/InventoryDataContext';
+import { CurrentUserProvider, useCurrentUser } from './context/CurrentUserContext';
 import { AppHeader } from './components/organisms/AppHeader';
 import { AuthGate } from './components/organisms/AuthGate';
+import { AccessGate } from './components/organisms/AccessGate';
 import { Dashboard } from './pages/Dashboard';
 import { Warehouses } from './pages/Warehouses';
 import { StockPage } from './pages/Stock';
 import { Products } from './pages/Products';
 import { Orders } from './pages/Orders';
 import { OrderDetail } from './pages/OrderDetail';
+import { Users } from './pages/Users';
 
 // Public Auth0 settings (not secrets). The audience must match Auth0:Audience in the API.
 const AUTH0_DOMAIN = 'dev-az6cdba8l01vtl8a.eu.auth0.com';
@@ -31,22 +34,37 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthGate>
-          <InventoryDataProvider>
-            <BrowserRouter>
-              <AppHeader />
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/warehouses" element={<Warehouses />} />
-                <Route path="/stock" element={<StockPage />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/:uid" element={<OrderDetail />} />
-              </Routes>
-            </BrowserRouter>
-          </InventoryDataProvider>
+          <CurrentUserProvider>
+            {/* The data provider loads warehouses etc. on mount, so it only
+                mounts once the user has a role and the API will answer. */}
+            <AccessGate>
+              <InventoryDataProvider>
+                <BrowserRouter>
+                  <AppHeader />
+                  <AppRoutes />
+                </BrowserRouter>
+              </InventoryDataProvider>
+            </AccessGate>
+          </CurrentUserProvider>
         </AuthGate>
       </ThemeProvider>
     </Auth0Provider>
+  );
+}
+
+function AppRoutes() {
+  const { canManageUsers } = useCurrentUser();
+
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/warehouses" element={<Warehouses />} />
+      <Route path="/stock" element={<StockPage />} />
+      <Route path="/products" element={<Products />} />
+      <Route path="/orders" element={<Orders />} />
+      <Route path="/orders/:uid" element={<OrderDetail />} />
+      {canManageUsers && <Route path="/users" element={<Users />} />}
+    </Routes>
   );
 }
 

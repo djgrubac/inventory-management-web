@@ -17,6 +17,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import IconButton from '@mui/material/IconButton';
 import TuneIcon from '@mui/icons-material/Tune';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { StockStatusChip } from '../components/atoms/StockStatusChip';
 import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
 import { StockAdjustDialog } from '../components/organisms/StockAdjustDialog';
@@ -28,6 +29,7 @@ const EMPTY_PAGE: StockPageResult = { stocks: [], totalCount: 0 };
 
 export function StockPage() {
   const { products, warehouses, categories, fetchStocks, adjustStock } = useInventoryData();
+  const { canWrite } = useCurrentUser();
 
   const [warehouseFilter, setWarehouseFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -168,9 +170,11 @@ export function StockPage() {
                   <StockStatusChip level={getStockLevel(stock.quantity)} />
                 </TableCell>
                 <TableCell align="right">
-                  <IconButton size="small" aria-label="Adjust stock" onClick={() => setAdjusting(stock)}>
-                    <TuneIcon fontSize="small" />
-                  </IconButton>
+                  {canWrite(stock.warehouseUid) && (
+                    <IconButton size="small" aria-label="Adjust stock" onClick={() => setAdjusting(stock)}>
+                      <TuneIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

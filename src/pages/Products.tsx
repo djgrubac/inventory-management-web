@@ -9,6 +9,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductTable } from '../components/organisms/ProductTable';
 import { ProductFormDialog } from '../components/organisms/ProductFormDialog';
@@ -19,6 +20,7 @@ import type { Product } from '../types/product';
 
 export function Products() {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useInventoryData();
+  const { canEditCatalog, canDeleteProducts } = useCurrentUser();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
@@ -53,9 +55,11 @@ export function Products() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Products</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Add product
-        </Button>
+        {canEditCatalog && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Add product
+          </Button>
+        )}
       </Stack>
 
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
@@ -94,8 +98,8 @@ export function Products() {
       <ProductTable
         products={pageItems}
         categories={categories}
-        onEdit={openEdit}
-        onDelete={setDeleting}
+        onEdit={canEditCatalog ? openEdit : undefined}
+        onDelete={canDeleteProducts ? setDeleting : undefined}
         footer={
           <TablePaginationBar
             count={filtered.length}

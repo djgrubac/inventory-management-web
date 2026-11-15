@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useApiFetch } from '../hooks/useApiFetch';
+import { apiError, toQueryString } from '../lib/api';
 import type { Category } from '../types/category';
 import type { Warehouse, WarehouseFormValues } from '../types/warehouse';
 import type { Product, ProductFormValues } from '../types/product';
@@ -11,16 +12,6 @@ import type { Order, OrderApiItem, OrderPage, OrderQuery, OrdersApiResponse, Ord
 // full lists for lookups and pickers). Stocks and orders are paged on the
 // server (there can be thousands), so pages fetch them on demand through
 // fetchStocks/fetchOrders/fetchOrder instead.
-
-function toQueryString(query: object): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== '') params.set(key, String(value));
-  }
-  return params.toString();
-}
-
-const API_URL = 'http://localhost:5000';
 
 function toOrder(item: OrderApiItem): Order {
   return {
@@ -36,20 +27,6 @@ function toOrder(item: OrderApiItem): Order {
       unitPrice: i.unitPrice,
     })),
   };
-}
-
-// Builds an Error from the API's ProblemDetails body so the UI can show why a
-// request was rejected (e.g. "Insufficient stock ..."), not just the status.
-async function apiError(response: Response, action: string): Promise<Error> {
-  try {
-    const body = await response.json();
-    const messages = body.errors ? Object.values(body.errors as Record<string, string[]>).flat() : [];
-    const detail = messages.length ? messages.join(' ') : body.detail;
-    if (detail) return new Error(detail);
-  } catch {
-    // Body wasn't JSON - fall through to the generic message.
-  }
-  return new Error(`Failed to ${action}: ${response.status}`);
 }
 
 interface InventoryDataContextValue {
@@ -83,17 +60,7 @@ export function InventoryDataProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const { getAccessTokenSilently } = useAuth0();
-
-  // Every request carries the logged-in user's Auth0 access token; the API
-  // checks the roles inside it.
-  const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {
-    const token = await getAccessTokenSilently();
-    return fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: { ...init.headers, Authorization: `Bearer ${token}` },
-    });
-  }, [getAccessTokenSilently]);
+  const apiFetch = useApiFetch();
 
   useEffect(()=> {
     const loadProducts = async ()=>{

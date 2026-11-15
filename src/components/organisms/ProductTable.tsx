@@ -14,8 +14,8 @@ import type { Product } from '../../types/product';
 interface ProductTableProps {
   products: Product[];
   categories: Category[];
-  onEdit: (product: Product) => void;
-  onDelete: (product: Product) => void;
+  onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
   footer?: ReactNode;
 }
 

@@ -21,6 +21,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { PriceLabel } from '../components/atoms/PriceLabel';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
 import { OrderStatus, OrderType, type Order } from '../types/order';
@@ -33,6 +34,7 @@ export function OrderDetail() {
   const { uid = '' } = useParams<{ uid: string }>();
   const navigate = useNavigate();
   const { products, warehouses, fetchOrder, addOrderItem, removeOrderItem, changeOrderStatus } = useInventoryData();
+  const { canWrite } = useCurrentUser();
 
   // undefined = still loading, null = not found
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
@@ -100,7 +102,8 @@ export function OrderDetail() {
   }
 
   const warehouse = warehouses.find((w) => w.uid === order.warehouseUid);
-  const editable = isOrderEditable(order.status);
+  // Read-only users see the order but none of the controls that change it.
+  const editable = isOrderEditable(order.status) && canWrite(order.warehouseUid);
   const quantity = Number(newQuantity);
 
   const handleAddItem = async () => {

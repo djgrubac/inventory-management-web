@@ -5,8 +5,11 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import { NavLink } from 'react-router-dom';
+import { useCurrentUser } from '../../context/CurrentUserContext';
+import { roleColor } from '../../lib/userLabels';
 
 const NAV_LINKS = [
   { to: '/', label: 'Dashboard' },
@@ -18,6 +21,9 @@ const NAV_LINKS = [
 
 export function AppHeader() {
   const { user, logout } = useAuth0();
+  const { user: me, canManageUsers } = useCurrentUser();
+  // Users is only for Administrators and Managers.
+  const links = canManageUsers ? [...NAV_LINKS, { to: '/users', label: 'Users' }] : NAV_LINKS;
 
   return (
     <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -27,7 +33,7 @@ export function AppHeader() {
           Inventory Management
         </Typography>
         <Stack direction="row" spacing={1}>
-          {NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <Button
               key={link.to}
               component={NavLink}
@@ -46,6 +52,7 @@ export function AppHeader() {
         <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
           {user?.email}
         </Typography>
+        {me?.role && <Chip label={me.role} color={roleColor(me.role)} size="small" sx={{ mr: 1 }} />}
         <Button color="inherit" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>
           Log out
         </Button>

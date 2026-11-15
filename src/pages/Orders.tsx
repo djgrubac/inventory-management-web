@@ -20,6 +20,7 @@ import Alert from '@mui/material/Alert';
 import LinearProgress from '@mui/material/LinearProgress';
 import AddIcon from '@mui/icons-material/Add';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { NewOrderDialog } from '../components/organisms/NewOrderDialog';
 import { PriceLabel } from '../components/atoms/PriceLabel';
 import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
@@ -34,6 +35,9 @@ const EMPTY_PAGE: OrderPage = { orders: [], totalCount: 0 };
 export function Orders() {
   const navigate = useNavigate();
   const { warehouses, fetchOrders, createOrder } = useInventoryData();
+  const { canWrite } = useCurrentUser();
+  // New orders can only go to warehouses the user has Write on.
+  const writableWarehouses = warehouses.filter((w) => canWrite(w.uid));
 
   // Warehouse and type live in the URL so "Back to orders" from a detail page
   // lands on the same list.
@@ -96,9 +100,11 @@ export function Orders() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Orders</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)} disabled={!warehouses.length}>
-          New order
-        </Button>
+        {writableWarehouses.length > 0 && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+            New order
+          </Button>
+        )}
       </Stack>
 
       <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }}>
@@ -175,8 +181,8 @@ export function Orders() {
 
       <NewOrderDialog
         open={dialogOpen}
-        warehouses={warehouses}
-        defaultWarehouseUid={warehouseUid}
+        warehouses={writableWarehouses}
+        defaultWarehouseUid={canWrite(warehouseUid) ? warehouseUid : (writableWarehouses[0]?.uid ?? '')}
         onClose={() => setDialogOpen(false)}
         onSubmit={async (type, uid) => {
           const orderUid = await createOrder(type, uid);
