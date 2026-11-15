@@ -9,14 +9,18 @@ import InputAdornment from '@mui/material/InputAdornment';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductTable } from '../components/organisms/ProductTable';
 import { ProductFormDialog } from '../components/organisms/ProductFormDialog';
 import { ConfirmDialog } from '../components/molecules/ConfirmDialog';
+import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
+import { useClientPagination } from '../hooks/usePagination';
 import type { Product } from '../types/product';
 
 export function Products() {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useInventoryData();
+  const { canEditCatalog, canDeleteProducts } = useCurrentUser();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
@@ -29,11 +33,13 @@ export function Products() {
   const filtered = useMemo(() => {
     const term = debouncedSearch.trim().toLowerCase();
     return products.filter((p) => {
-      const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
+      const matchesSearch = !term || p.name.toLowerCase().includes(term) || (p.description ?? '').toLowerCase().includes(term);
       const matchesCategory = !categoryFilter || p.categoryUid === categoryFilter;
       return matchesSearch && matchesCategory;
     });
   }, [products, debouncedSearch, categoryFilter]);
+
+  const { page, rowsPerPage, pageItems, setPage, setRowsPerPage, resetPage } = useClientPagination(filtered);
 
   const openCreate = () => {
     setEditing(null);
@@ -49,16 +55,21 @@ export function Products() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Products</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Add product
-        </Button>
+        {canEditCatalog && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Add product
+          </Button>
+        )}
       </Stack>
 
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
         <TextField
           placeholder="Search by name or description"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            resetPage();
+          }}
           size="small"
           sx={{ width: 320, maxWidth: '100%' }}
           slotProps={{
@@ -71,7 +82,10 @@ export function Products() {
             },
           }}
         />
-        <TextField label="Category" select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} size="small" sx={{ minWidth: 200 }}>
+        <TextField label="Category" select value={categoryFilter} onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            resetPage();
+          }} size="small" sx={{ minWidth: 200 }}>
           <MenuItem value="">All categories</MenuItem>
           {categories.map((c) => (
             <MenuItem key={c.uid} value={c.uid}>
@@ -81,7 +95,21 @@ export function Products() {
         </TextField>
       </Stack>
 
-      <ProductTable products={filtered} categories={categories} onEdit={openEdit} onDelete={setDeleting} />
+      <ProductTable
+        products={pageItems}
+        categories={categories}
+        onEdit={canEditCatalog ? openEdit : undefined}
+        onDelete={canDeleteProducts ? setDeleting : undefined}
+        footer={
+          <TablePaginationBar
+            count={filtered.length}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            onPageChange={setPage}
+            onRowsPerPageChange={setRowsPerPage}
+          />
+        }
+      />
 
       <ProductFormDialog
         open={dialogOpen}

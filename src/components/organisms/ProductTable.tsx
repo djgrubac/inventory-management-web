@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -13,11 +14,12 @@ import type { Product } from '../../types/product';
 interface ProductTableProps {
   products: Product[];
   categories: Category[];
-  onEdit: (product: Product) => void;
-  onDelete: (product: Product) => void;
+  onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
+  footer?: ReactNode;
 }
 
-export function ProductTable({ products, categories, onEdit, onDelete }: ProductTableProps) {
+export function ProductTable({ products, categories, onEdit, onDelete, footer }: ProductTableProps) {
   const categoryCaption = (categoryUid: string) => categories.find((c) => c.uid === categoryUid)?.caption ?? 'Uncategorized';
 
   return (
@@ -52,6 +54,7 @@ export function ProductTable({ products, categories, onEdit, onDelete }: Product
           )}
         </TableBody>
       </Table>
+      {footer}
     </TableContainer>
   );
 }

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import Autocomplete from '@mui/material/Autocomplete';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -11,36 +12,73 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
+import Alert from '@mui/material/Alert';
+import LinearProgress from '@mui/material/LinearProgress';
 import IconButton from '@mui/material/IconButton';
 import TuneIcon from '@mui/icons-material/Tune';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { StockStatusChip } from '../components/atoms/StockStatusChip';
+import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
 import { StockAdjustDialog } from '../components/organisms/StockAdjustDialog';
-import { getStockLevel } from '../types/product';
-import type { Stock } from '../types/stock';
+import { usePagination } from '../hooks/usePagination';
+import { getStockLevel, type Product } from '../types/product';
+import type { Stock, StockPage as StockPageResult } from '../types/stock';
+
+const EMPTY_PAGE: StockPageResult = { stocks: [], totalCount: 0 };
 
 export function StockPage() {
-  const { stocks, products, warehouses, categories, adjustStock } = useInventoryData();
+  const { products, warehouses, categories, fetchStocks, adjustStock } = useInventoryData();
+  const { canWrite } = useCurrentUser();
 
   const [warehouseFilter, setWarehouseFilter] = useState('');
-  const [productFilter, setProductFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [productFilter, setProductFilter] = useState<Product | null>(null);
   const [adjusting, setAdjusting] = useState<Stock | null>(null);
 
-  const productByUid = (uid: string) => products.find((p) => p.uid === uid);
-  const warehouseByUid = (uid: string) => warehouses.find((w) => w.uid === uid);
+  const { page, rowsPerPage, setPage, setRowsPerPage, resetPage } = usePagination();
+  const [result, setResult] = useState<StockPageResult>(EMPTY_PAGE);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Bumped after an adjustment so the current page is fetched again.
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const filtered = useMemo(
-    () =>
-      stocks.filter((s) => {
-        if (warehouseFilter && s.warehouseUid !== warehouseFilter) return false;
-        if (productFilter && s.productUid !== productFilter) return false;
-        if (categoryFilter && productByUid(s.productUid)?.categoryUid !== categoryFilter) return false;
-        return true;
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stocks, warehouseFilter, productFilter, categoryFilter],
+  const productOptions = useMemo(
+    () => (categoryFilter ? products.filter((p) => p.categoryUid === categoryFilter) : products),
+    [products, categoryFilter],
   );
+
+  const productUid = productFilter?.uid;
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError(null);
+    fetchStocks({
+      warehouseUid: warehouseFilter || undefined,
+      categoryUid: categoryFilter || undefined,
+      productUid,
+      pageNumber: page + 1,
+      pageSize: rowsPerPage,
+    })
+      .then((data) => {
+        if (!ignore) setResult(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!ignore) {
+          setResult(EMPTY_PAGE);
+          setError(err instanceof Error ? err.message : 'Failed to load stock.');
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [fetchStocks, warehouseFilter, categoryFilter, productUid, page, rowsPerPage, reloadKey]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -50,7 +88,17 @@ export function StockPage() {
 
       <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }}>
         <TuneIcon color="action" fontSize="small" />
-        <TextField label="Warehouse" select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)} size="small" sx={{ minWidth: 200 }}>
+        <TextField
+          label="Warehouse"
+          select
+          value={warehouseFilter}
+          onChange={(e) => {
+            setWarehouseFilter(e.target.value);
+            resetPage();
+          }}
+          size="small"
+          sx={{ minWidth: 200 }}
+        >
           <MenuItem value="">All warehouses</MenuItem>
           {warehouses.map((w) => (
             <MenuItem key={w.uid} value={w.uid}>
@@ -58,7 +106,20 @@ export function StockPage() {
             </MenuItem>
           ))}
         </TextField>
-        <TextField label="Category" select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} size="small" sx={{ minWidth: 200 }}>
+        <TextField
+          label="Category"
+          select
+          value={categoryFilter}
+          onChange={(e) => {
+            const value = e.target.value;
+            setCategoryFilter(value);
+            // Drop a selected product that isn't in the new category.
+            if (productFilter && value && productFilter.categoryUid !== value) setProductFilter(null);
+            resetPage();
+          }}
+          size="small"
+          sx={{ minWidth: 200 }}
+        >
           <MenuItem value="">All categories</MenuItem>
           {categories.map((c) => (
             <MenuItem key={c.uid} value={c.uid}>
@@ -66,17 +127,29 @@ export function StockPage() {
             </MenuItem>
           ))}
         </TextField>
-        <TextField label="Product" select value={productFilter} onChange={(e) => setProductFilter(e.target.value)} size="small" sx={{ minWidth: 200 }}>
-          <MenuItem value="">All products</MenuItem>
-          {products.map((p) => (
-            <MenuItem key={p.uid} value={p.uid}>
-              {p.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Autocomplete
+          options={productOptions}
+          getOptionLabel={(p) => p.name}
+          isOptionEqualToValue={(a, b) => a.uid === b.uid}
+          value={productFilter}
+          onChange={(_, p) => {
+            setProductFilter(p);
+            resetPage();
+          }}
+          size="small"
+          sx={{ minWidth: 260 }}
+          renderInput={(params) => <TextField {...params} label="Product" placeholder="All products" />}
+        />
       </Stack>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <TableContainer component={Paper} variant="outlined">
+        {loading && <LinearProgress />}
         <Table>
           <TableHead>
             <TableRow>
@@ -88,22 +161,24 @@ export function StockPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filtered.map((stock) => (
+            {result.stocks.map((stock) => (
               <TableRow key={`${stock.warehouseUid}-${stock.productUid}`} hover>
-                <TableCell>{productByUid(stock.productUid)?.name}</TableCell>
-                <TableCell>{warehouseByUid(stock.warehouseUid)?.name}</TableCell>
+                <TableCell>{stock.productName}</TableCell>
+                <TableCell>{stock.warehouseName}</TableCell>
                 <TableCell align="right">{stock.quantity}</TableCell>
                 <TableCell>
                   <StockStatusChip level={getStockLevel(stock.quantity)} />
                 </TableCell>
                 <TableCell align="right">
-                  <IconButton size="small" aria-label="Adjust stock" onClick={() => setAdjusting(stock)}>
-                    <TuneIcon fontSize="small" />
-                  </IconButton>
+                  {canWrite(stock.warehouseUid) && (
+                    <IconButton size="small" aria-label="Adjust stock" onClick={() => setAdjusting(stock)}>
+                      <TuneIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && (
+            {!loading && !error && result.stocks.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} align="center">
                   <Typography color="text.secondary">No stock records match these filters.</Typography>
@@ -112,17 +187,25 @@ export function StockPage() {
             )}
           </TableBody>
         </Table>
+        <TablePaginationBar
+          count={result.totalCount}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={setPage}
+          onRowsPerPageChange={setRowsPerPage}
+        />
       </TableContainer>
 
       <StockAdjustDialog
         open={!!adjusting}
         stock={adjusting}
-        productName={adjusting ? (productByUid(adjusting.productUid)?.name ?? '') : ''}
-        warehouseName={adjusting ? (warehouseByUid(adjusting.warehouseUid)?.name ?? '') : ''}
+        productName={adjusting?.productName ?? ''}
+        warehouseName={adjusting?.warehouseName ?? ''}
         onClose={() => setAdjusting(null)}
         onSubmit={async (newQuantity) => {
           if (!adjusting) return;
           await adjustStock(adjusting.warehouseUid, adjusting.productUid, newQuantity);
+          setReloadKey((k) => k + 1);
         }}
       />
     </Container>

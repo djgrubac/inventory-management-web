@@ -4,7 +4,8 @@ export interface Product {
   categoryUid: string;
   price: number;
   stockQuantity: number;
-  description: string;
+  // The API returns null for products saved without a description.
+  description: string | null;
 }
 
 export interface ProductFormValues {

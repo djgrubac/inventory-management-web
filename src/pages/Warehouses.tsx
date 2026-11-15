@@ -14,13 +14,19 @@ import IconButton from '@mui/material/IconButton';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useInventoryData } from '../context/InventoryDataContext';
+import { useCurrentUser } from '../context/CurrentUserContext';
 import { WarehouseFormDialog } from '../components/organisms/WarehouseFormDialog';
+import { TablePaginationBar } from '../components/molecules/TablePaginationBar';
+import { useClientPagination } from '../hooks/usePagination';
 import type { Warehouse } from '../types/warehouse';
 
 export function Warehouses() {
   const { warehouses, addWarehouse, updateWarehouse } = useInventoryData();
+  // Only Administrators add warehouses; Managers edit the ones they have Write on.
+  const { isAdministrator, canEditWarehouse } = useCurrentUser();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
+  const { page, rowsPerPage, pageItems, setPage, setRowsPerPage } = useClientPagination(warehouses);
 
   const openCreate = () => {
     setEditing(null);
@@ -36,9 +42,11 @@ export function Warehouses() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Warehouses</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Add warehouse
-        </Button>
+        {isAdministrator && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Add warehouse
+          </Button>
+        )}
       </Stack>
 
       <TableContainer component={Paper} variant="outlined">
@@ -52,15 +60,17 @@ export function Warehouses() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {warehouses.map((warehouse) => (
+            {pageItems.map((warehouse) => (
               <TableRow key={warehouse.uid} hover>
                 <TableCell>{warehouse.name}</TableCell>
                 <TableCell>{warehouse.address}</TableCell>
                 <TableCell>{warehouse.contactPerson}</TableCell>
                 <TableCell align="right">
-                  <IconButton size="small" aria-label="Edit warehouse" onClick={() => openEdit(warehouse)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
+                  {canEditWarehouse(warehouse.uid) && (
+                    <IconButton size="small" aria-label="Edit warehouse" onClick={() => openEdit(warehouse)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -73,6 +83,13 @@ export function Warehouses() {
             )}
           </TableBody>
         </Table>
+        <TablePaginationBar
+          count={warehouses.length}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={setPage}
+          onRowsPerPageChange={setRowsPerPage}
+        />
       </TableContainer>
 
       <WarehouseFormDialog

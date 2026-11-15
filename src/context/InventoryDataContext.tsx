@@ -1,26 +1,38 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { sampleCategories, sampleWarehouses, sampleProducts, sampleStocks, sampleOrders } from '../data/sampleData';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useApiFetch } from '../hooks/useApiFetch';
+import { apiError, toQueryString } from '../lib/api';
 import type { Category } from '../types/category';
 import type { Warehouse, WarehouseFormValues } from '../types/warehouse';
 import type { Product, ProductFormValues } from '../types/product';
-import type { Stock, StocksApiResponse } from '../types/stock';
-import { OrderStatus, OrderType, type Order } from '../types/order';
-// import { ReportSharp } from '@mui/icons-material';
+import type { StockPage, StockQuery, StocksApiResponse } from '../types/stock';
+import type { Order, OrderApiItem, OrderPage, OrderQuery, OrdersApiResponse, OrderStatus, OrderType } from '../types/order';
 
-// This is a design mockup: everything below lives only in memory (React state).
-// There is no server and no HTTP calls anywhere in this file or the rest of
-// the app - refreshing the page resets all data back to the samples above.
-//
-// When you're ready to connect a real backend, this is the one file to
-// change: keep the function names/signatures the same, but replace each
-// function body with a fetch call to your API instead of a setState update.
+// All HTTP calls to the API live in this file. Categories, warehouses and
+// products are loaded once on mount and kept in state (other screens need the
+// full lists for lookups and pickers). Stocks and orders are paged on the
+// server (there can be thousands), so pages fetch them on demand through
+// fetchStocks/fetchOrders/fetchOrder instead.
+
+function toOrder(item: OrderApiItem): Order {
+  return {
+    uid: item.uid,
+    status: item.status,
+    type: item.type,
+    warehouseUid: item.warehouse.uid,
+    created: item.created,
+    items: item.items.map((i) => ({
+      productUid: i.product.uid,
+      productName: i.product.name,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+    })),
+  };
+}
 
 interface InventoryDataContextValue {
   categories: Category[];
   warehouses: Warehouse[];
   products: Product[];
-  stocks: Stock[];
-  orders: Order[];
 
   addCategory: (caption: string) => Promise<void>;
 
@@ -31,26 +43,28 @@ interface InventoryDataContextValue {
   addWarehouse: (values: WarehouseFormValues) => Promise<void>;
   updateWarehouse: (uid: string, values: WarehouseFormValues) => Promise<void>;
 
+  fetchStocks: (query: StockQuery) => Promise<StockPage>;
   adjustStock: (warehouseUid: string, productUid: string, newQuantity: number) => Promise<void>;
 
-  createOrder: (type: OrderType, warehouseUid: string) => string;
-  addOrderItem: (orderUid: string, productUid: string, quantity: number) => void;
-  removeOrderItem: (orderUid: string, productUid: string) => void;
-  changeOrderStatus: (orderUid: string, newStatus: OrderStatus) => void;
+  fetchOrders: (query: OrderQuery) => Promise<OrderPage>;
+  fetchOrder: (uid: string) => Promise<Order | null>;
+  createOrder: (type: OrderType, warehouseUid: string) => Promise<string>;
+  addOrderItem: (orderUid: string, productUid: string, quantity: number) => Promise<void>;
+  removeOrderItem: (orderUid: string, productUid: string) => Promise<void>;
+  changeOrderStatus: (orderUid: string, newStatus: OrderStatus) => Promise<void>;
 }
 
 const InventoryDataContext = createContext<InventoryDataContextValue | null>(null);
 
 export function InventoryDataProvider({ children }: { children: ReactNode }) {
-  const [categories, setCategories] = useState<Category[]>(sampleCategories);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>(sampleWarehouses);
-  const [products, setProducts] = useState<Product[]>(sampleProducts);
-  const [stocks, setStocks] = useState<Stock[]>(sampleStocks);
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const apiFetch = useApiFetch();
 
   useEffect(()=> {
     const loadProducts = async ()=>{
-    const response = await fetch('http://localhost:5000/api/products');
+    const response = await apiFetch(`/api/products`);
 
     if (!response.ok){
       throw new Error(`Failed to load products: ${response.status}`);
@@ -63,10 +77,10 @@ export function InventoryDataProvider({ children }: { children: ReactNode }) {
     loadProducts().catch((err) => {
       console.error(err);
     });
-  },[])
+  },[apiFetch])
 
   const addProduct = async (values: ProductFormValues) => {
-  const response = await fetch('http://localhost:5000/api/products', {
+  const response = await apiFetch(`/api/products`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(values),
@@ -81,7 +95,7 @@ export function InventoryDataProvider({ children }: { children: ReactNode }) {
 };
 
 const updateProduct = async (uid: string, values: ProductFormValues) => {
-  const response = await fetch(`http://localhost:5000/api/products/${uid}`,{
+  const response = await apiFetch(`/api/products/${uid}`,{
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uid, ...values }),
@@ -95,7 +109,7 @@ setProducts((prev) => prev.map((p) => (p.uid === uid ? { ...p, ...values } : p))
 }
 
 const deleteProduct = async (uid: string) => {
-  const response = await fetch(`http://localhost:5000/api/products/${uid}`, {
+  const response = await apiFetch(`/api/products/${uid}`, {
     method: 'DELETE',
   });
 
@@ -108,7 +122,7 @@ const deleteProduct = async (uid: string) => {
 
 useEffect(()=> {
     const loadCategories = async ()=>{
-    const response = await fetch('http://localhost:5000/api/categories');
+    const response = await apiFetch(`/api/categories`);
 
     if (!response.ok){
       throw new Error(`Failed to load categories: ${response.status}`);
@@ -121,10 +135,10 @@ useEffect(()=> {
     loadCategories().catch((err) => {
       console.error(err);
     });
-  },[])
+  },[apiFetch])
 
   const addCategory = async (caption: string) => {
-    const response = await fetch('http://localhost:5000/api/categories', {
+    const response = await apiFetch(`/api/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caption }),
@@ -139,7 +153,7 @@ useEffect(()=> {
   };
   useEffect(()=> {
     const loadWarehouses = async ()=>{
-    const response = await fetch('http://localhost:5000/api/warehouses');
+    const response = await apiFetch(`/api/warehouses`);
 
     if (!response.ok){
       throw new Error(`Failed to load warehouses: ${response.status}`);
@@ -152,10 +166,10 @@ useEffect(()=> {
     loadWarehouses().catch((err) => {
       console.error(err);
     });
-  },[])
+  },[apiFetch])
 
   const addWarehouse = async (values: WarehouseFormValues) => {
-  const response = await fetch('http://localhost:5000/api/warehouses', {
+  const response = await apiFetch(`/api/warehouses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(values),
@@ -170,7 +184,7 @@ useEffect(()=> {
 };
 
   const updateWarehouse = async (uid: string, values: WarehouseFormValues) => {
-  const response = await fetch(`http://localhost:5000/api/warehouses/${uid}`,{
+  const response = await apiFetch(`/api/warehouses/${uid}`,{
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uid, ...values }),
@@ -183,114 +197,111 @@ useEffect(()=> {
   setWarehouses((prev) => prev.map((w) => (w.uid === uid ? { ...w, ...values } : w)));
 };
 
-  useEffect(() => {
-    const loadStocks = async () => {
-      // The API pages results (default 10 per page), so ask for a large page.
-      const response = await fetch('http://localhost:5000/api/stocks?pageSize=1000');
+  const fetchStocks = useCallback(async (query: StockQuery): Promise<StockPage> => {
+    const response = await apiFetch(`/api/stocks?${toQueryString(query)}`);
 
-      if (!response.ok) {
-        throw new Error(`Failed to load stocks: ${response.status}`);
-      }
+    if (!response.ok) {
+      throw await apiError(response, 'load stocks');
+    }
 
-      const data: StocksApiResponse = await response.json();
-      setStocks(
-        data.stocks.map((item) => ({
-          warehouseUid: item.warehouse.uid,
-          productUid: item.product.uid,
-          quantity: item.quantity,
-        })),
-      );
+    const data: StocksApiResponse = await response.json();
+    return {
+      stocks: data.stocks.map((item) => ({
+        warehouseUid: item.warehouse.uid,
+        warehouseName: item.warehouse.name,
+        productUid: item.product.uid,
+        productName: item.product.name,
+        quantity: item.quantity,
+      })),
+      totalCount: data.totalCount,
     };
-
-    loadStocks().catch((err) => {
-      console.error(err);
-    });
-  }, []);
+  }, [apiFetch]);
 
   const adjustStock = async (warehouseUid: string, productUid: string, newQuantity: number) => {
-    const response = await fetch('http://localhost:5000/api/stocks/adjust', {
+    const response = await apiFetch(`/api/stocks/adjust`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ warehouseUid, productUid, newQuantity }),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to adjust stock: ${response.status}`);
+      throw await apiError(response, 'adjust stock');
     }
-
-    setStocks((prev) => {
-      const existing = prev.find((s) => s.warehouseUid === warehouseUid && s.productUid === productUid);
-      if (existing) {
-        return prev.map((s) =>
-          s.warehouseUid === warehouseUid && s.productUid === productUid ? { ...s, quantity: newQuantity } : s,
-        );
-      }
-      return [...prev, { warehouseUid, productUid, quantity: newQuantity }];
-    });
   };
 
-  const createOrder = (type: OrderType, warehouseUid: string) => {
-    const uid = crypto.randomUUID();
-    setOrders((prev) => [...prev, { uid, status: OrderStatus.Pending, type, warehouseUid, items: [], created: new Date().toISOString() }]);
+  // The fetch* functions only read from the API, so they keep a stable
+  // identity and pages can safely list them as effect dependencies.
+  const fetchOrders = useCallback(async (query: OrderQuery): Promise<OrderPage> => {
+    const response = await apiFetch(`/api/orders?${toQueryString(query)}`);
+
+    if (!response.ok) {
+      throw await apiError(response, 'load orders');
+    }
+
+    const data: OrdersApiResponse = await response.json();
+    return { orders: data.orders.map(toOrder), totalCount: data.totalCount };
+  }, [apiFetch]);
+
+  const fetchOrder = useCallback(async (uid: string): Promise<Order | null> => {
+    const response = await apiFetch(`/api/orders/${uid}`);
+
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw await apiError(response, 'load order');
+    }
+
+    return toOrder(await response.json());
+  }, [apiFetch]);
+
+  const createOrder = async (type: OrderType, warehouseUid: string) => {
+    const response = await apiFetch(`/api/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, warehouseUid }),
+    });
+
+    if (!response.ok) {
+      throw await apiError(response, 'create order');
+    }
+
+    const uid: string = await response.json();
     return uid;
   };
 
-  const addOrderItem = (orderUid: string, productUid: string, quantity: number) => {
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.uid !== orderUid) return order;
-        const existingItem = order.items.find((i) => i.productUid === productUid);
-        const product = products.find((p) => p.uid === productUid);
-        if (existingItem) {
-          return {
-            ...order,
-            items: order.items.map((i) => (i.productUid === productUid ? { ...i, quantity: i.quantity + quantity } : i)),
-          };
-        }
-        return {
-          ...order,
-          items: [...order.items, { productUid, quantity, unitPrice: product?.price ?? 0 }],
-        };
-      }),
-    );
-  };
+  const addOrderItem = async (orderUid: string, productUid: string, quantity: number) => {
+    const response = await apiFetch(`/api/orders/${orderUid}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderUid, productUid, quantity }),
+    });
 
-  const removeOrderItem = (orderUid: string, productUid: string) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.uid === orderUid ? { ...order, items: order.items.filter((i) => i.productUid !== productUid) } : order,
-      ),
-    );
-  };
-
-  // Mirrors the backend rule: completing an order moves stock at the
-  // order's warehouse - incoming orders add to stock, outgoing orders
-  // subtract from it.
-  const changeOrderStatus = (orderUid: string, newStatus: OrderStatus) => {
-    const order = orders.find((o) => o.uid === orderUid);
-    if (!order) return;
-
-    if (newStatus === OrderStatus.Completed) {
-      const direction = order.type === OrderType.Incoming ? 1 : -1;
-      setStocks((prev) => {
-        let next = prev;
-        for (const item of order.items) {
-          const existing = next.find((s) => s.warehouseUid === order.warehouseUid && s.productUid === item.productUid);
-          if (existing) {
-            next = next.map((s) =>
-              s.warehouseUid === order.warehouseUid && s.productUid === item.productUid
-                ? { ...s, quantity: Math.max(0, s.quantity + direction * item.quantity) }
-                : s,
-            );
-          } else if (direction > 0) {
-            next = [...next, { warehouseUid: order.warehouseUid, productUid: item.productUid, quantity: item.quantity }];
-          }
-        }
-        return next;
-      });
+    if (!response.ok) {
+      throw await apiError(response, 'add item');
     }
+  };
 
-    setOrders((prev) => prev.map((o) => (o.uid === orderUid ? { ...o, status: newStatus } : o)));
+  const removeOrderItem = async (orderUid: string, productUid: string) => {
+    const response = await apiFetch(`/api/orders/${orderUid}/items/${productUid}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw await apiError(response, 'remove item');
+    }
+  };
+
+  // Completing an order moves stock on the server (incoming adds, outgoing
+  // subtracts); the Stock page fetches fresh data whenever it's opened.
+  const changeOrderStatus = async (orderUid: string, newStatus: OrderStatus) => {
+    const response = await apiFetch(`/api/orders/${orderUid}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderUid, newStatus }),
+    });
+
+    if (!response.ok) {
+      throw await apiError(response, 'change order status');
+    }
   };
 
   const value = useMemo<InventoryDataContextValue>(
@@ -298,22 +309,23 @@ useEffect(()=> {
       categories,
       warehouses,
       products,
-      stocks,
-      orders,
       addCategory,
       addProduct,
       updateProduct,
       deleteProduct,
       addWarehouse,
       updateWarehouse,
+      fetchStocks,
       adjustStock,
+      fetchOrders,
+      fetchOrder,
       createOrder,
       addOrderItem,
       removeOrderItem,
       changeOrderStatus,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [categories, warehouses, products, stocks, orders],
+    [categories, warehouses, products],
   );
 
   return <InventoryDataContext.Provider value={value}>{children}</InventoryDataContext.Provider>;

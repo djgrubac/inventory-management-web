@@ -6,6 +6,7 @@ import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
 import Stack from '@mui/material/Stack';
 import { OrderType } from '../../types/order';
 import { orderTypeLabel } from '../../lib/orderLabels';
@@ -16,23 +17,35 @@ interface NewOrderDialogProps {
   warehouses: Warehouse[];
   defaultWarehouseUid: string;
   onClose: () => void;
-  onSubmit: (type: OrderType, warehouseUid: string) => void;
+  onSubmit: (type: OrderType, warehouseUid: string) => Promise<void>;
 }
 
 export function NewOrderDialog({ open, warehouses, defaultWarehouseUid, onClose, onSubmit }: NewOrderDialogProps) {
   const [type, setType] = useState<OrderType>(OrderType.Incoming);
   const [warehouseUid, setWarehouseUid] = useState(defaultWarehouseUid);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setType(OrderType.Incoming);
       setWarehouseUid(defaultWarehouseUid);
+      setError(null);
     }
   }, [open, defaultWarehouseUid]);
 
-  const handleSubmit = () => {
-    onSubmit(type, warehouseUid);
-    onClose();
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit(type, warehouseUid);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -40,6 +53,7 @@ export function NewOrderDialog({ open, warehouses, defaultWarehouseUid, onClose,
       <DialogTitle>New order</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {error && <Alert severity="error">{error}</Alert>}
           <TextField label="Type" select value={type} onChange={(e) => setType(Number(e.target.value) as OrderType)} fullWidth>
             <MenuItem value={OrderType.Incoming}>{orderTypeLabel(OrderType.Incoming)}</MenuItem>
             <MenuItem value={OrderType.Outgoing}>{orderTypeLabel(OrderType.Outgoing)}</MenuItem>
@@ -54,9 +68,11 @@ export function NewOrderDialog({ open, warehouses, defaultWarehouseUid, onClose,
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={!warehouseUid}>
-          Create
+        <Button onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={!warehouseUid || saving}>
+          {saving ? 'Creating...' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Grid';
@@ -19,20 +19,29 @@ import { StatCard } from '../components/molecules/StatCard';
 import { PriceLabel } from '../components/atoms/PriceLabel';
 import { useInventoryData } from '../context/InventoryDataContext';
 import { getStockLevel } from '../types/product';
-import { OrderStatus } from '../types/order';
+import { OrderStatus, type Order } from '../types/order';
 import { orderStatusColor, orderStatusLabel, orderTotal, orderTypeLabel } from '../lib/orderLabels';
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { products, warehouses, orders } = useInventoryData();
+  const { products, warehouses, fetchOrders } = useInventoryData();
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number | null>(null);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
 
   const lowStockCount = useMemo(() => products.filter((p) => getStockLevel(p.stockQuantity) !== 'in-stock').length, [products]);
-  const pendingOrdersCount = useMemo(() => orders.filter((o) => o.status === OrderStatus.Pending).length, [orders]);
 
-  const recentOrders = useMemo(
-    () => [...orders].sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()).slice(0, 5),
-    [orders],
-  );
+  // Orders are paged on the server: the pending count comes from totalCount
+  // of a 1-row page, and the API already returns newest orders first.
+  useEffect(() => {
+    Promise.all([fetchOrders({ status: OrderStatus.Pending, pageSize: 1 }), fetchOrders({ pageSize: 5 })])
+      .then(([pending, recent]) => {
+        setPendingOrdersCount(pending.totalCount);
+        setRecentOrders(recent.orders);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }, [fetchOrders]);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -50,7 +59,7 @@ export function Dashboard() {
           <StatCard label="Warehouses" value={warehouses.length} icon={<WarehouseIcon color="action" fontSize="large" />} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Pending orders" value={pendingOrdersCount} icon={<PendingActionsIcon color="info" fontSize="large" />} />
+          <StatCard label="Pending orders" value={pendingOrdersCount ?? '-'} icon={<PendingActionsIcon color="info" fontSize="large" />} />
         </Grid>
       </Grid>
 
